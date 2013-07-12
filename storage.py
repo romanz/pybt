@@ -61,7 +61,7 @@ class Data:
             success = (self.meta.hashes[i] == h)
             self.bits[i] = success
             if success:
-                log.debug('validated piece #{}'.format(i))
+                log.debug('validated piece #{} ({} of {})'.format(i, self.bits.count(), len(self.bits)))
 
         log.info('host has {} of {} pieces'.format(self.bits.count(), len(self.bits)))
         return sum(self.bits[i] for i in index_list)
