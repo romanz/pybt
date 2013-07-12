@@ -4,6 +4,11 @@ import connection
 import protocol
 import metainfo
 import storage
+import tracker
+
+import gevent
+
+log = logging.getLogger('main')
 
 def main(args):
     logging.basicConfig(
@@ -11,13 +16,20 @@ def main(args):
         level=logging.DEBUG)
 
     meta = metainfo.MetaInfo(args.filename)
-    host_id = metainfo.hash(args.host_id)
-
     data = storage.Data(meta)
+
     if any(~data.bits):
-        conn = connection.Connection(('127.0.0.1', 51413), timeout=60)
-        p = protocol.PeerProtocol(host_id, data, conn=conn)
-        p.loop()
+        host_id = metainfo.hash(args.host_id)
+        peers = tracker.get_peers(meta, host_id, port=6889)
+        for addr in peers:
+            try:
+                conn = connection.Connection(addr, timeout=10)
+                p = protocol.PeerProtocol(host_id, data, conn=conn)
+                p.loop()
+            except connection.Closed:
+                log.warning('connection closed by peer')
+            except connection.Timeout:
+                log.warning('peer timeout')
 
     log.info('Download is over')
     return
