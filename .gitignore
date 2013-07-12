@@ -1,0 +1,6 @@
+*.pyc
+*~
+*.torrent
+*.txt
+*.tmp
+*.sublime-*
