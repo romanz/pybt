@@ -8,7 +8,6 @@ import metainfo
 import bencode
 
 import construct as c
-import gevent
 from gevent import socket
 
 class Error(Exception):

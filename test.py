@@ -5,7 +5,6 @@ import functools
 import collections
 
 import gevent
-from gevent import queue
 from gevent import socket
 
 import construct as c
