@@ -20,25 +20,11 @@ def piece_hashes(pieces):
 def hash(data): 
     return hashlib.sha1(data).digest()
 
-def parse_address(url):
-    ''' Parse tracker address of the form "udp://address:port/".
-    '''
-    proto, url = url.split('://')
-    assert proto == 'udp'
-
-    addr, url = url.split(':')
-    port, end = url.split('/')
-
-    assert end == ''
-    port = int(port)
-
-    return (addr, port)
-
 class MetaInfo:
     def __init__(self, torrent_fname):
         _meta = load(torrent_fname)
         self.info_hash = hash(bencode.encode(_meta['info']))
-        self.announce_addr = parse_address(_meta['announce'])
+        self.announce_addr = _meta['announce']
         self.name = _meta['info']['name']
         self.length = _meta['info']['length']
         self.hashes = piece_hashes(_meta['info']['pieces'])

@@ -2,6 +2,7 @@ import random
 import struct
 import cStringIO
 import binascii
+import logging
 
 import hashlib
 import metainfo
@@ -13,12 +14,17 @@ from gevent import socket
 class Error(Exception):
     pass
 
-MAX_PACKET_SIZE = 1024
+MAX_PACKET_SIZE = 2**16
+
+log = logging.getLogger('tracker')
 
 class udp:
-    def __init__(self, addr):
+    def __init__(self, addr, timeout=None):
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.conn.settimeout(timeout)
         self.conn.connect(addr)
+        log.debug('connected to {}'.format(self.conn.getpeername()))
+        self.addr = addr
         self.id = None
 
     def connect(self):
@@ -30,16 +36,21 @@ class udp:
         tx = random.getrandbits(32)
         obj = c.Container(connection_id=0x41727101980, action=0, transaction_id=tx)
         msg = req.build(obj)
+
+        log.debug('transaction: {}'.format(tx))
         self.conn.send(msg)
 
         # handle response
+        msg = self.conn.recv(MAX_PACKET_SIZE)
+
         resp = c.Struct('response',
                 c.UBInt32('action'),
                 c.UBInt32('transaction_id'),
                 c.UBInt64('connection_id'),
             )
-        msg = self.conn.recv(MAX_PACKET_SIZE)
+
         obj = resp.parse(msg)
+        log.debug('connection: {}'.format(obj.connection_id))
 
         if obj.action != 0:
             raise Error('Incorrect action: {}'.format(obj))
@@ -49,7 +60,7 @@ class udp:
 
         self.id = obj.connection_id
 
-    def announce(self, peer, status, event=0):
+    def announce(self, peer, data, **kw):
         
         if self.conn is None:
             raise Error('Must connect to tracker before announcement')
@@ -75,19 +86,21 @@ class udp:
             'transaction_id': tx, 
             'action': 1, 
             'connection_id': self.id, 
-            'event': event,
+            'event': kw.get('event', 0),
             'ip_addr': 0,
             'key': 0,
-            'num_want': -1}
+            'num_want': kw.get('num_want', -1)
+        }
         kw.update(peer)
-        kw.update(status)
+        kw.update(data)
         obj = c.Container(**kw)
 
         msg = req.build(obj)
+        log.debug('request peers for {}'.format(binascii.hexlify(obj.info_hash)))
         self.conn.send(msg)
 
         # handle response
-        msg = self.conn.recv(MAX_PACKET_SIZE)
+        msg = self.conn.recv(MAX_PACKET_SIZE)        
         
         if msg[0] != '\x00':
             raise Error('Invalid response: {}'.format(repr(msg)))
@@ -115,23 +128,49 @@ class udp:
             raise Error('Unexpected transaction_id: {}'.format(obj))
 
         peer_list = [('{}.{}.{}.{}'.format(*p.addr), p.port) for p in obj.peer]
+        log.debug('got {} peers'.format(len(peer_list)))
         
         fields = ('interval', 'seeders', 'leechers')
-        return peer_list, {k: obj[k] for k in fields}
+        log.info('statistics: {}'.format({k: obj[k] for k in fields}))
+        return peer_list
+
+def parse_address(url):
+    ''' Parse tracker address of the form "udp://address:port/".
+    '''
+    proto, url = url.split('://')
+    assert proto == 'udp'
+
+    addr, url = url.split(':')
+    port, end = url.split('/')
+
+    assert end == ''
+    port = int(port)
+
+    return (addr, port)
 
 def get_peers(meta, peer_id, port):
-    tracker = udp(meta.announce_addr)
-    tracker.connect()
+
     peer = dict(peer_id=peer_id, port=port)
-    status = dict(info_hash=meta.info_hash, uploaded=0, downloaded=0, left=meta.length)
-    peers, stats = tracker.announce(peer, status)
-    return peers, stats
+    data = dict(info_hash=meta.info_hash, uploaded=0, downloaded=0, left=meta.length)
+
+    while True:
+        try:            
+            log.debug('connecting to {}'.format(meta.announce_addr))
+            addr = parse_address(meta.announce_addr)
+            tracker = udp(addr, timeout=10)
+            tracker.connect()
+            return tracker.announce(peer, data, num_want=10)
+        except socket.timeout:
+            log.warning('timeout')
+        except socket.error, e:
+            log.warning('unreachable: {}'.format(tracker.conn.getpeername()))
 
 def test_tracker(fname):
+    logging.basicConfig(
+        format='%(asctime)-15s [%(levelname)s] %(message)s', 
+        level=logging.DEBUG)
     meta = metainfo.MetaInfo(fname)
-    peers, stats = get_peers(meta, peer_id=metainfo.hash('test'), port=6889)
-    print stats
-    print '-' * 80
+    peers = get_peers(meta, peer_id=metainfo.hash('test_tracker'), port=6889)
     print peers
 
 if __name__ == '__main__':
