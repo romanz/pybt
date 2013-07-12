@@ -122,12 +122,11 @@ class PeerProtocol:
         assert reply.info_hash == self.data.meta.info_hash
         assert reply.pstr == 'BitTorrent protocol'
         self.peer_id = reply.peer_id
+        log.info('handshake from {!r}'.format(self.peer_id))
 
         downloader = Downloader(self.data)
         self.handle_event = functools.partial(downloader.handle_event, self)
-
-        log.info('handshake from {!r}'.format(self.peer_id))
-
+        
         log.info('updating peer with our bitfield')
         self.send_cmd('bitfield', bits=self.data.bits.tobytes())
 
