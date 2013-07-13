@@ -148,7 +148,7 @@ def parse_address(url):
 
     return (addr, port)
 
-def get_peers(meta, peer_id, port):
+def get_peers(meta, peer_id, port, timeout=None, num_want=-1):
 
     peer = dict(peer_id=peer_id, port=port)
     data = dict(info_hash=meta.info_hash, uploaded=0, downloaded=0, left=meta.length)
@@ -157,9 +157,9 @@ def get_peers(meta, peer_id, port):
         try:            
             log.debug('connecting to {}'.format(meta.announce_addr))
             addr = parse_address(meta.announce_addr)
-            tracker = udp(addr, timeout=10)
+            tracker = udp(addr, timeout=timeout)
             tracker.connect()
-            return tracker.announce(peer, data, num_want=10)
+            return tracker.announce(peer, data, num_want=num_want)
         except socket.timeout:
             log.warning('timeout')
         except socket.error, e:
