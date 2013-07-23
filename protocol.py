@@ -167,7 +167,7 @@ class Downloader:
                 while peer._pending_requests:
                     req = peer._pending_requests.pop()
                     log.info('flush {} '.format(req))
-                    self.reqs.remove(peer.peer_id)
+                    self.reqs.pop(peer.peer_id)
             else: # unchoke
                 self._request(peer)
 
