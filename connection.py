@@ -1,7 +1,6 @@
 import logging
 import functools
 
-import gevent
 from gevent import socket
 
 log = logging.getLogger('connection')
@@ -10,7 +9,7 @@ class Closed(Exception):
     pass
 
 class Connection:
-    def __init__(self, addr, timeout=None, rx=None, tx=None):
+    def __init__(self, addr, timeout=None):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if timeout is not None:
             sock.settimeout(timeout)
@@ -20,8 +19,6 @@ class Connection:
         except (socket.timeout, socket.error) as e:
             raise Closed(e)
         self.sock = sock
-        self.rx = _create_throttle(rx)
-        self.tx = _create_throttle(tx)
 
     def recv(self, n):        
         try:
@@ -32,12 +29,11 @@ class Connection:
         if data is None: # peer socket is closed
             raise Closed('peer closed connection')
 
-        return self.rx(data) # throttle RX bandwidth
+        return data 
 
     def send(self, data):
         try:
-            data = self.tx(data) # throttle TX bandwidth
-            self.sock.sendall(data)
+            _sendall(self.sock, data)
         except (socket.timeout, socket.error) as e:
             raise Closed(e)
 
@@ -54,19 +50,5 @@ def _recvall(sock, n):
 
             data = data + buf
 
-def _create_throttle(obj):
-
-    if obj is None:
-        return (lambda x: x) # no-op function
-
-    if isinstance(obj, (int, float, long)):
-        bw = float(obj)
-        return functools.partial(throttle, bandwidth=bw)
-
-    return obj # return object as is
-
-def throttle(data, bandwidth=None):
-     # time needed for data to be sent/received
-    dt = (len(data) / bandwidth) if bandwidth else 0.0
-    gevent.sleep(dt)
-    return data
+def _sendall(sock, data):
+    sock.sendall(data)
