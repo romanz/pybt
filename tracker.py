@@ -1,3 +1,5 @@
+import re
+import urllib
 import random
 import struct
 import cStringIO
@@ -169,6 +171,24 @@ def parse_address(url):
     port = int(port)
 
     return (addr, port)
+
+def parse_magnet(link):
+    prefix = 'magnet:?'
+    assert link.startswith(prefix)
+    args = link.split('?', 1)[1]
+    args = args.split('&')
+
+    result = {}
+    for k, v in (arg.split('=') for arg in args):
+        v = urllib.unquote(v)
+        result.setdefault(k, []).append(v)
+
+    filename, = result['dn'] 
+    urn, = result['xt']  
+    info_hash = urn.rsplit(':', 1)[1]
+    trackers = result['tr'] 
+    
+    return {'filename': filename, 'hash': info_hash, 'trackers': trackers}
 
 def get_peers(meta, peer_id, port, timeout=None, num_want=-1):
 
