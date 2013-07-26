@@ -161,20 +161,20 @@ class udp:
 def parse_address(url):
     ''' Parse tracker address of the form "udp://address:port/".
     '''
+    url = url.rstrip('/')
     proto, url = url.split('://')
     assert proto == 'udp'
 
-    addr, url = url.split(':')
-    port, end = url.split('/')
-
-    assert end == ''
+    addr, port = url.split(':')
     port = int(port)
 
     return (addr, port)
 
 def parse_magnet(link):
     prefix = 'magnet:?'
-    assert link.startswith(prefix)
+    if not link.startswith(prefix):
+        return None
+
     args = link.split('?', 1)[1]
     args = args.split('&')
 
@@ -184,8 +184,11 @@ def parse_magnet(link):
         result.setdefault(k, []).append(v)
 
     filename, = result['dn'] 
+
     urn, = result['xt']  
     info_hash = urn.rsplit(':', 1)[1]
+    info_hash = binascii.unhexlify(info_hash)
+
     trackers = result['tr'] 
     
     return {'filename': filename, 'hash': info_hash, 'trackers': trackers}
@@ -207,15 +210,22 @@ def get_peers(meta, peer_id, port, timeout=None, num_want=-1):
         except socket.error, e:
             log.warning('unreachable: {}'.format(tracker.conn.getpeername()))
 
-def test_tracker(fname):
+def test_tracker(arg):
     logging.basicConfig(
         format='%(asctime)-15s [%(levelname)s] %(message)s', 
         level=logging.DEBUG)
-    meta = metainfo.MetaInfo(fname)
+    
+    res = parse_magnet(arg)
+    if res:
+        import collections
+        Meta = collections.namedtuple('Meta', ['info_hash', 'announce_addr', 'name', 'length'])
+        meta = Meta(res['hash'], res['trackers'][0], res['filename'], 0)
+    else:
+        meta = metainfo.MetaInfo(arg)
     peers = get_peers(meta, peer_id=metainfo.hash('test_tracker'), port=6889, timeout=10)
     print peers
 
 if __name__ == '__main__':
     import sys
-    fname, = sys.argv[1:]
-    test_tracker(fname)
+    arg, = sys.argv[1:]
+    test_tracker(arg)
