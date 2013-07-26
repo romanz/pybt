@@ -137,8 +137,8 @@ class udp:
         kw.update(data)
         obj = c.Container(**kw)
 
-        msg = announce_req.build(obj)
         log.debug('request peers for {}'.format(binascii.hexlify(obj.info_hash)))
+        msg = announce_req.build(obj)
         self.conn.send(msg)
 
         # handle response
@@ -152,7 +152,7 @@ class udp:
             raise Error('Unexpected transaction_id: {}'.format(obj))
 
         peer_list = [('{}.{}.{}.{}'.format(*p.addr), p.port) for p in obj.peer]
-        log.debug('got {} peers'.format(len(peer_list)))
+        log.info('got {} peers from {}'.format(len(peer_list), self.conn.getpeername()))
         
         fields = ('interval', 'seeders', 'leechers')
         log.info('statistics: {}'.format({k: obj[k] for k in fields}))
