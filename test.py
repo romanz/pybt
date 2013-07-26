@@ -21,8 +21,8 @@ def handle_peer(host_id, data, addr):
 
 def main(args):
     logging.basicConfig(
-        format='%(asctime)-15s [%(levelname)s] %(message)s', 
-        level=logging.DEBUG)
+        format='%(asctime)-15s [%(levelname)s] %(name)s: %(message)s', 
+        level=logging.INFO)
 
     meta = metainfo.MetaInfo(args.filename)
     data = storage.Data(meta)

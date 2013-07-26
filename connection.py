@@ -19,6 +19,7 @@ class Connection:
         except (socket.timeout, socket.error) as e:
             raise Closed(e)
         self.sock = sock
+        self.addr = addr
 
     def recv(self, n):        
         try:

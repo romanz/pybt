@@ -14,7 +14,7 @@ import peer
 import storage
 import connection
 
-log = logging.getLogger('Protocol')
+log = logging.getLogger('protocol')
 
 class PeerProtocol:
     
@@ -51,13 +51,13 @@ class PeerProtocol:
 
         if reply.name in {'unchoke', 'choke'}:
             self.state['am_choking'] = (reply.name == 'choke')
-            log.info('host is {}d by peer'.format(reply.name))
+            log.info('host is {}d by peer {}'.format(reply.name, self.conn.addr))
             self.handle_event( choke=self.state['am_choking'] )
             return
 
         if reply.name == {'interested', 'uninterested'}:
             self.state['peer_interested'] = (reply.name == 'interested')
-            log.info('peer is {}'.format(reply.name))
+            log.info('peer {} is {}'.format(self.conn.addr, reply.name))
             return
 
         if reply.name in {'bitfield', 'have'}:
@@ -67,23 +67,23 @@ class PeerProtocol:
                 peer_bits = self.peer_bits.copy()
                 peer_bits[reply.index] = True
 
-            log.info('peer has {} of {} pieces'.format(peer_bits.count(), 
-                peer_bits.length()))
+            log.debug('peer {} has {} of {} pieces'.format(self.conn.addr, 
+                peer_bits.count(), peer_bits.length()))
 
             self.peer_bits = peer_bits
             self.handle_event( peer_bits=peer_bits )
 
             needed = self.peer_bits & ~self.data.bits
-            log.info('peer has {} needed pieces'.format(needed.count()))
+            log.debug('peer {} has {} needed pieces'.format(self.conn.addr, needed.count()))
 
             if any(needed) and self.state['am_interested'] == False:
-                log.info('host is interested in peer')
+                log.info('host is interested in peer {}'.format(self.conn.addr))
                 self.state['am_interested'] = True
                 self.send_cmd('interested')
                 return
 
             if not any(needed) and self.state['am_interested'] == True:
-                log.info('host is uninterested in peer')
+                log.info('host is uninterested in peer {}'.format(self.conn.addr))
                 self.state['am_interested'] = False
                 self.send_cmd('uninterested')
                 return
@@ -91,28 +91,28 @@ class PeerProtocol:
             return
 
         if reply.name == 'piece':
-            log.debug('downloaded #{} @ {} [{}B]'.format(reply.index, reply.begin, len(reply.data)))
+            log.debug('downloaded #{} @ {} [{}B] from {}'.format(reply.index, reply.begin, len(reply.data), self.conn.addr))
             self.data.write(index=reply.index, begin=reply.begin, data=reply.data)
             self.handle_event( piece=reply )
             return
 
         if reply.name == 'request':
-            log.debug('peer request #{} @ {} [{}B]'.format(reply.index, reply.begin, reply.length))
+            log.debug('peer {} request #{} @ {} [{}B]'.format(self.conn.addr, reply.index, reply.begin, reply.length))
             data = self.data.read(index=reply.index, begin=reply.begin, size=reply.length)
 
             self.send_cmd('piece', index=reply.index, begin=reply.begin, data=data)
-            log.debug('peer upload  #{} @ {} [{}B]'.format(reply.index, reply.begin, len(data)))            
+            log.debug('peer {} upload  #{} @ {} [{}B]'.format(self.conn.addr, reply.index, reply.begin, len(data)))            
             return
 
         if reply.name == 'keep_alive':
-            log.debug('got keep alive from peer')            
+            log.debug('got keep alive from peer {}'.format(self.conn.addr))
             return
 
         log.warning('unsupported reply: {!r}'.format(reply))
 
     def initialize(self):
 
-        log.info('handshake to {!r}'.format(self.conn.sock.getpeername()))
+        log.info('handshake to {}'.format(self.conn.addr))
 
         msg = peer.build_handshake(self.data.meta.info_hash, self.host_id)
         self.conn.send(msg)
@@ -122,15 +122,15 @@ class PeerProtocol:
         assert reply.info_hash == self.data.meta.info_hash
         assert reply.pstr == 'BitTorrent protocol'
         self.peer_id = reply.peer_id
-        log.info('handshake from {!r}'.format(self.peer_id))
+        log.info('handshake from peer {} [{!r}]'.format(self.conn.addr, self.peer_id))
 
         downloader = Downloader(self.data)
         self.handle_event = functools.partial(downloader.handle_event, self)
         
-        log.info('updating peer with our bitfield')
+        log.debug('updating peer with our bitfield')
         self.send_cmd('bitfield', bits=self.data.bits.tobytes())
 
-        log.info('peer is unchoked by host')
+        log.debug('peer is unchoked by host')
         self.send_cmd('unchoke')
 
         self._pending_requests = set([])
@@ -202,7 +202,7 @@ class Downloader:
                 return # no additional requests should be made
 
             req, = reqs
-            log.debug('requesting #{} @ {} [{}B] '.format(req.index, req.begin, req.length))
+            log.debug('requesting #{} @ {} [{}B] from peer {}'.format(req.index, req.begin, req.length, peer.conn.addr))
             self.reqs[req].add( peer.peer_id )
             peer.send_cmd('request', **vars(req))
             peer._pending_requests.add(req)            
