@@ -25,7 +25,7 @@ class ParseError(Exception):
 def parse_magnet(link):
     prefix = 'magnet:?'
     if not link.startswith(prefix):
-        raise ParseError('Bad prefix for magnet link', prefix)
+        raise ParseError('Invalid magnet link {!r}'.format(link))
 
     args = link.split('?', 1)[1]
     args = args.split('&')

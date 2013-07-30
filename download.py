@@ -43,7 +43,7 @@ def metadata_load(info_hash):
         
     if metainfo.hash(data) == info_hash:
         meta = metainfo.MetaInfo(bencode.decode(data))
-        log.info('"{}" ({} hashes) = {:.1f}MB'.format(meta.name, 
+        log.info('MetaInfo "{}" ({} hashes) = {:.1f}MB'.format(meta.name, 
             len(meta.hashes), meta.total / 1e6))
         return meta
 
@@ -79,7 +79,6 @@ class Downloader:
 
     def get_peers(self, trackers):
         # return [('localhost', 51413)] # test local BT
-        print trackers
         return tracker.get_peers(trackers[0], self.info_hash, self.host_id, num_want=50)
 
     def run(self, trackers):
