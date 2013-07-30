@@ -8,7 +8,7 @@ log = logging.getLogger('connection')
 class Closed(Exception):
     pass
 
-class Connection:
+class Stream:
     def __init__(self, addr, timeout=None):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if timeout is not None:
@@ -19,7 +19,6 @@ class Connection:
         except (socket.timeout, socket.error) as e:
             raise Closed(e)
         self.sock = sock
-        self.addr = addr
 
     def recv(self, n):        
         try:
@@ -37,6 +36,9 @@ class Connection:
             _sendall(self.sock, data)
         except (socket.timeout, socket.error) as e:
             raise Closed(e)
+
+    def close(self):
+        self.sock.close()
 
 def _recvall(sock, n):
         data = ''

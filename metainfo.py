@@ -1,9 +1,8 @@
+import math
+import urllib
 import hashlib
 import bencode
-
-def load(fname):
-    with file(fname, 'rb') as f:
-        return bencode.decode(f.read())
+import binascii
 
 def split(data, block_size):
     n = len(data)
@@ -20,13 +19,46 @@ def piece_hashes(pieces):
 def hash(data): 
     return hashlib.sha1(data).digest()
 
-class MetaInfo:
-    def __init__(self, torrent_fname):
-        _meta = load(torrent_fname)
-        self.info_hash = hash(bencode.encode(_meta['info']))
-        self.announce_addr = _meta['announce']
-        self.name = _meta['info']['name']
-        self.length = _meta['info']['length']
-        self.hashes = piece_hashes(_meta['info']['pieces'])
-        self.piece_length = _meta['info']['piece length']
+class ParseError(Exception):
+    pass
 
+def parse_magnet(link):
+    prefix = 'magnet:?'
+    if not link.startswith(prefix):
+        raise ParseError('Bad prefix for magnet link', prefix)
+
+    args = link.split('?', 1)[1]
+    args = args.split('&')
+
+    result = {}
+    for k, v in (arg.split('=') for arg in args):
+        v = urllib.unquote(v)
+        result.setdefault(k, []).append(v)
+
+    name, = result['dn'] 
+
+    urn, = result['xt']  
+    info_hash = urn.rsplit(':', 1)[1]
+    info_hash = binascii.unhexlify(info_hash)
+
+    trackers = result['tr'] 
+    
+    return {'name': name, 'info_hash': info_hash, 'trackers': trackers}
+
+class MetaInfo:
+    def __init__(self, info):
+        self.info_hash = hash(bencode.encode(info))
+        self.name = info['name']
+        if 'length' in info:
+            self.total = info['length']
+        if 'files' in info:
+            self.total = sum(f['length'] for f in info['files'])
+
+        self.hashes = piece_hashes(info['pieces'])
+        self.piece_length = info['piece length']
+
+        assert math.ceil(float(self.total) / self.piece_length) == len(self.hashes)
+
+    def __repr__(self):
+        return '<MetaInfo "{}" ({} hashes) = {:.1f}MB>'.format(self.name, 
+            len(self.hashes), self.total / 1e6)

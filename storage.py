@@ -7,16 +7,12 @@ import bitarray
 
 import metainfo
 
-def bitfield(meta, data=None):
-    total_size = meta.length
-    n = int(math.ceil(float(total_size) / meta.piece_length))
-    if data is None:
-        bits = bitarray.bitarray(0 for i in xrange(n))
-    else:
-        bits = bitarray.bitarray(endian='big')
+def bitfield(data, n):
+    bits = bitarray.bitarray(endian='big')
+    if data is not None:
         bits.frombytes(data)
-        assert not any(bits[n:])
-        del bits[n:]
+    assert not any(bits[n:])
+    del bits[n:]
     return bits
 
 def indices(bits):
@@ -27,28 +23,24 @@ log = logging.getLogger('storage')
 class Data:
 
     def __init__(self, meta):
-        
         h = binascii.hexlify(meta.info_hash)
-        log.info('torrent name: {}'.format(meta.name))        
-        log.info('info hash: {}'.format(h))
-        fname = '{}.tmp'.format( h )
+        fname = '{}.tmp'.format(h)
+        self.meta = meta
         mode = ('r' if os.path.exists(fname) else 'w') + 'b+'
         self.fd = file(fname, mode)
-        self.meta = meta
         self._fill()
-
-        self.bits = bitarray.bitarray([0]*len(meta.hashes), endian='big')
+        self.bits = bitarray.bitarray([0]*len(self.meta.hashes), endian='big')
         self.validate()
 
     def _fill(self):
         self.fd.seek(0, 2) # seek to EOF
-        left = self.meta.length - self.fd.tell() # bytes left to fill
+        left = self.meta.total - self.fd.tell() # bytes left to fill
         buff = '\x00' * 1024
         while left > 0:
             buff = buff[:left]
             self.fd.write(buff)
             left = left - len(buff)
-        self.fd.seek(self.meta.length)
+        self.fd.seek(self.meta.total)
         self.fd.truncate()
 
     def validate(self, index_list=None):
@@ -73,7 +65,7 @@ class Data:
         if index < n-1:
             return self.meta.piece_length
         else:
-            return self.meta.length - self.meta.piece_length * (n-1)
+            return self.meta.total - self.meta.piece_length * (n-1)
 
     def read(self, index, begin=0, size=None):
         if size is None:

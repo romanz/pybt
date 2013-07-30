@@ -31,7 +31,6 @@ def _decode(s):
 		res = int(v)
 		return res, s
 
-
 	if s[0] == 'l': # l<item1>...<itemN>e
 		s = s[1:]
 		res = []
@@ -49,7 +48,7 @@ def _decode(s):
 			res[k] = v
 		return res, s[1:]
 
-	# length-prefixed string
+	# length-prefixed string (L:s1s2s3...sL)
 	n, s = split(s, ':')
 	n = int(n) 
 	return s[:n], s[n:]

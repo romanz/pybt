@@ -1,5 +1,4 @@
 import re
-import urllib
 import random
 import struct
 import cStringIO
@@ -170,58 +169,30 @@ def parse_address(url):
 
     return (addr, port)
 
-def parse_magnet(link):
-    prefix = 'magnet:?'
-    if not link.startswith(prefix):
-        return None
-
-    args = link.split('?', 1)[1]
-    args = args.split('&')
-
-    result = {}
-    for k, v in (arg.split('=') for arg in args):
-        v = urllib.unquote(v)
-        result.setdefault(k, []).append(v)
-
-    filename, = result['dn'] 
-
-    urn, = result['xt']  
-    info_hash = urn.rsplit(':', 1)[1]
-    info_hash = binascii.unhexlify(info_hash)
-
-    trackers = result['tr'] 
-    
-    return {'filename': filename, 'hash': info_hash, 'trackers': trackers}
-
-def get_peers(meta, peer_id, port, timeout=None, num_want=-1):
+def get_peers(addr, info_hash, peer_id, timeout=None, port=6889, num_want=-1, 
+                uploaded=0, downloaded=0, left=0):
 
     peer = dict(peer_id=peer_id, port=port)
-    data = dict(info_hash=meta.info_hash, uploaded=0, downloaded=0, left=meta.length)
+    data = dict(info_hash=info_hash, uploaded=uploaded, downloaded=downloaded, left=left)
 
+    addr = parse_address(addr)
     while True:
         try:            
-            log.debug('connecting to {}'.format(meta.announce_addr))
-            addr = parse_address(meta.announce_addr)
+            log.debug('connecting to {}'.format(addr))
             tracker = udp(addr, timeout=timeout)
             tracker.connect()
             return tracker.announce(peer, data, num_want=num_want)
         except socket.timeout:
             log.warning('timeout')
         except socket.error, e:
-            log.warning('unreachable: {}'.format(tracker.conn.getpeername()))
+            log.warning('unreachable: {}'.format(addr))
 
 def test_tracker(arg):
     logging.basicConfig(
         format='%(asctime)-15s [%(levelname)s] %(message)s', 
         level=logging.DEBUG)
     
-    res = parse_magnet(arg)
-    if res:
-        import collections
-        Meta = collections.namedtuple('Meta', ['info_hash', 'announce_addr', 'name', 'length'])
-        meta = Meta(res['hash'], res['trackers'][0], res['filename'], 0)
-    else:
-        meta = metainfo.MetaInfo(arg)
+    meta = metainfo.MetaInfo(arg)
     peers = get_peers(meta, peer_id=metainfo.hash('test_tracker'), port=6889, timeout=10)
     print peers
 
